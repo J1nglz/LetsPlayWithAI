@@ -1,0 +1,137 @@
+%Choosing number of topics
+
+%words = strsplit(join(str));
+clear all
+% url(1) = "https://en.wikipedia.org/wiki/Ground_(electricity)";
+% textData = getWikipediaText(url(1));
+% url(2) = "https://en.wikipedia.org/wiki/Land_reclamation";
+% url(3) = "https://en.wikipedia.org/wiki/Lightning";
+url(1) = "https://en.wikipedia.org/wiki/Fire";
+url(2) = "https://en.wikipedia.org/wiki/Water";
+url(3) = "https://en.wikipedia.org/wiki/Worm";
+textData = getWikipediaText(url(1));
+for i =2:3
+   str = getWikipediaText(url(i));
+   textData(end+1:end+length(str),:) = str; 
+end
+
+documents = preprocessText(textData);
+bag = bagOfWords(documents);
+bag = removeInfrequentWords(bag,2);
+bag = removeEmptyDocuments(bag);
+%% chose a number of topics and build a model
+numTopics = 5;
+mdl = fitlda(bag,numTopics,'Verbose',0);
+% figure;
+% hold on
+% for topicIdx = 1:numTopics
+%     subplot(3,2,topicIdx)
+%     wordcloud(mdl,topicIdx);
+%     title("Topic " + topicIdx)
+% end
+
+
+%% perform k means clustering on them to gain more insight?
+% test = mdl.DocumentTopicProbabilities;
+% testSample = test(1:10:end,:); %only picking every 10th one
+% colorTopics(1) = "k*";
+% colorTopics(2) = "b*";
+% colorTopics(3) = "y*";
+% colorTopics(4) = "g*";
+% colorTopics(5) = "r*";
+% figure
+% hold on
+% for i = 1:numTopics
+%     plot(testSample(:,i),colorTopics(i));
+% end
+% hold off
+% opts = statset('Display','final');
+% [idx,C] = kmeans(testSample,numTopics,'Distance','cityblock',...
+%     'Replicates',5,'Options',opts);
+% figure
+% hold on
+% for i = 1:numTopics
+%    plot(testSample(idx==i,:),colorTopics(i),'MarkerSize',12)
+%   
+% end
+% % plot(C(:,1),C(:,2),C(:,3),C(:,4),C(:,5),'kx',...
+% %      'MarkerSize',15,'LineWidth',3) 
+% % legend('Cluster 1','Cluster 2','Centroids',...
+% %        'Location','NE')
+% title 'Cluster Assignments and Centroids'
+% hold off
+
+%% most probably topic words
+wordTests=mdl.TopicWordProbabilities;
+wordTopValues = 10;
+wordTopic = strings(wordTopValues,numTopics);
+for i = 1:numTopics
+
+   %find the most probable words for each topic
+   wordIdx = getTopValueIndex(wordTests(:,i),wordTopValues);
+   wordTopic(:,i) = mdl.Vocabulary(wordIdx);
+   
+end
+% get the unique words from the list
+wordUnique=[wordTopic(:)];
+wordUnique=unique(wordUnique);
+%R = strings(length(wordUnique),2,height(tdetails));
+nouns = tdetails(tdetails.PartOfSpeech=="noun",:);
+for i = 1:length(wordUnique)   
+    wordDetails = nouns(find(nouns.Token == wordUnique(i)),1);
+    if ~isempty(wordDetails)
+        wordToSearch(i) = wordDetails.Token(1);
+    end
+end
+
+%sortrows(sortTests,2);
+%% Find which topic this sentence is most likely to be
+newDocument = tokenizedDocument("ground or earth is the reference point in an electrical circuit from which voltages are measured");
+topicMixture = transform(mdl,newDocument);
+
+figure
+bar(topicMixture)
+xlabel("Topic Index")
+ylabel("Probability")
+title("Document Topic Probabilities")
+
+%% See which topics the first 5 documents are related to
+figure
+topicMixtures = transform(mdl,documents(1:5));
+barh(topicMixtures(1:5,:),'stacked')
+xlim([0 1])
+title("Topic Mixtures")
+xlabel("Topic Probability")
+ylabel("Document")
+legend("Topic " + string(1:numTopics),'Location','northeastoutside')
+
+
+%% Automaticall determine the number of topics our data needs
+numDocuments = numel(documents);
+cvp = cvpartition(numDocuments,'HoldOut',0.1); %holdout 10% to test with
+documentsTrain = documents(cvp.training);
+documentsValidation = documents(cvp.test);
+
+numTopicsRange = [1 5 10 15 20];
+for i = 1:numel(numTopicsRange)
+    numTopics = numTopicsRange(i);
+    
+    mdl = fitlda(bag,numTopics, ...
+        'Solver','savb', ...
+        'Verbose',0);
+    
+    [~,validationPerplexity(i)] = logp(mdl,documentsValidation);
+    timeElapsed(i) = mdl.FitInfo.History.TimeSinceStart(end);
+end
+
+figure
+yyaxis left
+plot(numTopicsRange,validationPerplexity,'+-')
+ylabel("Validation Perplexity")
+
+yyaxis right
+plot(numTopicsRange,timeElapsed,'o-')
+ylabel("Time Elapsed (s)")
+
+legend(["Validation Perplexity" "Time Elapsed (s)"],'Location','southeast')
+xlabel("Number of Topics")

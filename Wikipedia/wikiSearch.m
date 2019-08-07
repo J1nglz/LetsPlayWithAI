@@ -1,0 +1,35 @@
+function [results] = wikiSearch(searchTerm,numOfResults)
+
+numOfResults = char(num2str(numOfResults));
+searchTopic = regexprep(searchTerm, ' ', '%20');
+
+formatPrefix = 'https://en.wikipedia.org/w/api.php?';
+% Search Topics have %20 for spaces
+formatSpecSearch ="/w/api.php?action=opensearch&format=json&search=<insertTopic>";
+formatSpecSearch = regexprep(formatSpecSearch,'\/[w]\/[api]+\.[ph]+\?(?=\w*)',formatPrefix);
+% Search the topic and create a string array of the results
+urlSearch = regexprep(formatSpecSearch,'(?<=([&](search)[=]))([<]insertTopic[>])',searchTopic);
+urlSearch = [urlSearch{:} '&limit=' numOfResults];
+resultSearch = webread(urlSearch);
+searchRelated = cellArray2stringArray(resultSearch{2});
+searchRelated = regexprep(searchRelated, ' ', '_');
+
+%Do searches first get the list then go through the list and make a title
+%array
+formatSpecContent = "/w/api.php?action=query&format=json&prop=extracts&continue=&titles=<insertTitle>&explaintext=1";
+formatSpecContent = regexprep(formatSpecContent,'\/[w]\/[api]+\.[ph]+\?(?=\w*)',formatPrefix);
+
+resultText = strings(length(searchRelated),1);
+for i = 1:length(searchRelated)
+    urlContent = regexprep(formatSpecContent,'(?<=([&](titles)[=]))([<]insertTitle[>])',searchRelated(i));
+    resultContent = webread(urlContent);
+    
+    uniqueId=fieldnames(resultContent.query.pages);
+    uniqueId = uniqueId{:};
+    resultText(i,1) = searchRelated(i);
+    resultText(i,2) = resultContent.query.pages.(uniqueId).extract;
+end
+
+results = resultText;
+
+end

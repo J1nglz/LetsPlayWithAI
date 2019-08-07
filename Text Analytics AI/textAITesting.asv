@@ -1,0 +1,244 @@
+%Choosing number of topics
+
+%words = strsplit(join(str));
+clear all
+% url(1) = "https://en.wikipedia.org/wiki/Ground_(electricity)";
+% textData = getWikipediaText(url(1));
+% url(2) = "https://en.wikipedia.org/wiki/Land_reclamation";
+% url(3) = "https://en.wikipedia.org/wiki/Lightning";
+url(1) = "https://en.wikipedia.org/wiki/Fire";
+url(2) = "https://en.wikipedia.org/wiki/Water";
+url(3) = "https://en.wikipedia.org/wiki/Worm";
+textData = getWikipediaText(url(1));
+for i =2:3
+   str = getWikipediaText(url(i));
+   textData(end+1:end+length(str),:) = str; 
+end
+
+documents = preprocessText(textData);
+bag = bagOfWords(documents);
+bag = removeInfrequentWords(bag,2);
+bag = removeEmptyDocuments(bag);
+%% chose a number of topics and build a model
+numTopics = 5;
+mdl = fitlda(bag,numTopics,'Verbose',0);
+% figure;
+% hold on
+% for topicIdx = 1:numTopics
+%     subplot(3,2,topicIdx)
+%     wordcloud(mdl,topicIdx);
+%     title("Topic " + topicIdx)
+% end
+
+
+
+
+%% most probably topic words
+wordTests=mdl.TopicWordProbabilities;
+wordTopValues = 10;
+wordTopic = strings(wordTopValues,numTopics);
+for i = 1:numTopics
+   %find the most probable words for each topic
+   wordIdx = getTopValueIndex(wordTests(:,i),wordTopValues);
+   wordTopic(:,i) = mdl.Vocabulary(wordIdx);   
+end
+% get the unique words from the list
+wordUnique=[wordTopic(:)];
+wordUnique = normalizeWords(wordUnique,'Style','lemma');
+wordUnique=unique(wordUnique);
+%tdetails = tokenDetails(documents);
+docsNormalized = normalizeWords(documents,'Style','lemma');
+tdetails = tokenDetails(docsNormalized);
+nouns = tdetails(tdetails.PartOfSpeech=="noun",:);
+for i = 1:length(wordUnique)   
+    wordDetails = nouns(find(nouns.Token == wordUnique(i)),1);
+    if ~isempty(wordDetails)
+        wordToSearch(i) = wordDetails.Token(1);
+    end
+end
+wordToSearch = unique(wordToSearch);
+wordToSearch = rmmissing(wordToSearch);
+%% create wikipedia links
+
+%https://en.wikipedia.org/wiki/<topic here>
+url = strings(length(wordToSearch),1);
+for i = 1:length(wordToSearch)
+   url(i) = "https://en.wikipedia.org/wiki/"+wordToSearch(i);
+end
+
+textAdditions = textData;
+statusBad(1) = 0;
+for i =1:length(url)
+    [pageText,status] = getWikipediaText(url(i));
+    
+    if status == 1
+        textAdditions(end+1:end+length(pageText),:) = pageText;
+    else
+        statusBad(end+1) = i;  
+    end
+    
+end
+
+%% 
+documentsNew = preprocessText(textAdditions);
+documentDetails = tokenDetails(documentsNew);
+bagNew = bagOfWords(documentsNew);
+bagNew = removeInfrequentWords(bagNew,2);
+bagNew = removeEmptyDocuments(bagNew);
+
+nouns = documentDetails(documentDetails.PartOfSpeech=="noun",:);
+nouns = nouns.Token;
+nouns = unique(nouns);
+
+%% I think my word embedding was better
+
+%embSelf = trainWordEmbedding(documentsNew)
+embSelf = trainWordEmbedding(documentsNew, ...
+    'Dimension',50, ...
+    'MinCount',3, ...
+    'NumEpochs',10)
+wordBag = bagNew.Vocabulary;
+V=word2vec(embSelf,wordBag);
+%nouns(~ismember(nouns,emb.Vocabulary))=[];
+%vec=word2vec(emb,nouns);
+XY = tsne(V(1:end,:));
+figure
+textscatter(XY,wordBag(1:end))
+VWater=word2vec(embSelf,"water");
+VFire=word2vec(embSelf,"fire");
+VLife=word2vec(embSelf,"life");
+VAmerican=word2vec(embSelf,"american");
+VInteractions=word2vec(embSelf,"interactions");
+vec2word(embSelf,VFire+VWater)
+%M = VFire+VWater;
+M=VInteractions+VFire;
+k=5;
+[words,dist] = vec2word(embSelf,M,k,'Distance','euclidean');
+figure;
+bar(dist)
+xticklabels(words)
+xlabel("Word")
+ylabel("Distance")
+title("Distances to Vector")
+%numTopics = 50;
+%mdlNew = fitlda(bagNew,numTopics)%,'Verbose',0);
+%% see what normalizing does
+documentsNorm = normalizeWords(documentsNew,'Style','lemma');
+documentsNormDetails = tokenDetails(documentsNorm);
+bagNorm = bagOfWords(documentsNorm);
+bagNorm = removeInfrequentWords(bagNorm,2);
+bagNorm = removeEmptyDocuments(bagNorm);
+embNorm = trainWordEmbedding(documentsNorm, ...
+    'Dimension',50, ...
+    'MinCount',3, ...
+    'NumEpochs',10)
+wordBagNorm = bagNorm.Vocabulary;
+V_norm=word2vec(embNorm,wordBagNorm);
+
+
+%% file embedding
+filename = "C:\Users\e373206\Documents\MATLAB\Text Analytics AI\glove.6B\glove.6B.50d.txt";
+emb = readWordEmbedding(filename);
+wordBag = bagNew.Vocabulary;
+wordBag(~ismember(wordBag,emb.Vocabulary))=[];
+vec=word2vec(emb,wordBag);
+%nouns(~ismember(nouns,emb.Vocabulary))=[];
+%vec=word2vec(emb,nouns);
+%xy = tsne(vec(1:25:end,:));
+%figure
+%textscatter(xy,nouns(1:25:end))
+vecWater=word2vec(emb,"water");
+vecFire=word2vec(emb,"fire");
+vecLife=word2vec(emb,"life");
+vecAmerican=word2vec(emb,"american");
+vecInteractions=word2vec(emb,"interactions");
+vec2word(emb,vecFire+vecWater)
+M = vecFire+vecWater;
+k=5;
+[words,dist] = vec2word(emb,M,k,'Distance','euclidean');
+figure;
+bar(dist)
+xticklabels(words)
+xlabel("Word")
+ylabel("Distance")
+title("Distances to Vector")
+
+
+% figure;
+% hold on
+% for topicIdx = 1:5
+%     subplot(3,2,topicIdx)
+%     wordcloud(mdlNew,topicIdx);
+%     title("Topic " + topicIdx)
+% end
+% plot(validationPerplexity2)
+% newDocuments = tokenizedDocument([
+% "Water is the source of all existence"
+% "Fire creates more life than water"]);
+% topicIdx = predict(mdlNew,newDocuments)
+% %%
+% 
+% wordTests=mdlNew.TopicWordProbabilities;
+% wordTopValues = 50;
+% wordTopic = strings(wordTopValues,2);
+% for i = 1:2
+%    words = wordTests(:,topicIdx(i));
+%    %find the most probable words for each topic
+%    wordIdx = getTopValueIndex(words,wordTopValues);
+%    wordTopic(:,i) = mdlNew.Vocabulary(wordIdx);
+%    
+% end
+
+%%
+%chose a number of topics and build a model
+% numTopics = 5;
+% mdlNew = fitlda(bagNew,numTopics,'Verbose',0);
+% figure;
+% hold on
+% for topicIdx = 1:numTopics
+%     subplot(3,2,topicIdx)
+%     wordcloud(mdlNew,topicIdx);
+%     title("Topic " + topicIdx)
+% end
+
+%% Automaticall determine the number of topics our data needs
+% numDocuments = numel(documentsNew);
+% cvp = cvpartition(numDocuments,'HoldOut',0.1); %holdout 10% to test with
+% documentsTrain = documentsNew(cvp.training);
+% documentsValidation = documentsNew(cvp.test);
+% numTopicsCenter(1) = floor(numDocuments)/2;
+% numTopicsStart(1) = floor(numTopicsCenter*0.25);
+% numTopicsEnd(1) = 3*floor(numTopicsCenter*0.25);
+% numTopicsRange = [numTopicsStart numTopicsCenter numTopicsEnd];
+% 
+% for i = 1:numel(numTopicsRange)
+%     numTopics = numTopicsRange(i);
+%     
+%     mdlNew = fitlda(bagNew,numTopics, ...
+%         'Solver','savb', ...
+%         'Verbose',0);
+%     
+%     [~,validationPerplexity(i)] = logp(mdlNew,documentsValidation);
+%     timeElapsed(i) = mdlNew.FitInfo.History.TimeSinceStart(end);
+% end
+% for j =2:5
+% [val,idx]=max(validationPerplexity);
+% numTopicsCenter(j) = val;
+% numTopicsStart(j) = floor(numTopicsCenter*0.25);
+% numTopicsEnd(j) = 3*floor(numTopicsCenter*0.25);
+% 
+% end
+% figure
+% yyaxis left
+% plot(numTopicsRange,validationPerplexity,'+-')
+% ylabel("Validation Perplexity")
+% 
+% yyaxis right
+% plot(numTopicsRange,timeElapsed,'o-')
+% ylabel("Time Elapsed (s)")
+% 
+% legend(["Validation Perplexity" "Time Elapsed (s)"],'Location','southeast')
+% xlabel("Number of Topics")
+
+
+

@@ -1,0 +1,55 @@
+JMOOUSEEMU emulates the mouse cursor positioning and clicking. It supports either single- or multiple-command modes.
+
+---- 
+UPDATE (8/31/2010): 
+INPUTEMU utility (linked below) supersedes this function (without HG handle support). If your program does not use the HG handle (i.e., H=0), consider using INPUTEMU instead. 
+----
+
+The function utilizes the java.Robot class to control mouse.
+
+Single-Command Mode:
+
+JMOUSEEMU(H,POS,CLICK) mouse cursor to POS = [X,Y] (in pixels) with respect to (the lower left hand corner of) the graphics object H. Mouse click option is one of 'none' | 'normal' | 'extend' | 'alternate' | 'open', according to Figure's SelectionType property. If only mouse click without cursor movement is desired, set H = 0 and leave POS empty.
+
+The arguments H and CLICK may be omitted. See the help text for more details.
+
+Example. Martin Weber's setfocus(H) function can be implemented using this function:
+
+mpos = get(0,'PointerLocation'); 
+jmouseemu(H,'normal'); 
+jmouseemu(0,mpos);
+
+Multiple-Command Mode (new in v.2.0):
+
+JMOUSEEMU(CMDS,T) performs the sequence of mouse commands using a MATLAB timer with interval T seconds. CMDS is an N-by-3 cell array specifying N mouse commands. The n-th row consists of {H_n, POS_n, CLICK_n} to define the mouse command at nT-th second. Alternatively, each interval between successive commands can be specified with size-N vector T.
+
+In addition to the CLICK options for Single-Command Mode, two additional CLICK options are introduced to support mouse dragging: 'drag_on' and 'drag_off'. Also, there are 2 not-so-CLICK options: 'delay' and 'wheel'. The 'delay' option causes a momentary pause (duration in POS in seconds) and the 'wheel' option turns the mouse wheel (notches to turn in POS: positive-towards, negative-away).
+
+IMPORTANT USAGE NOTE: 
+If jMouseEmu is used to trigger multiple mouse callbacks within MATLAB, call jMouseEmu for each callback trigger. Moreover, set the last jMouseEmu command to trigger the callback. Not following this may cause undesirable behavior (i.e., delayed callback execution and erroneous figure's SelectionType property value during the callback).
+
+Example. Circular mouse movement:
+
+Ts = 0.01; % update interval 
+T = 2; % emulation duration
+
+% plot a circle 
+t = (0:Ts:T)'; 
+mpos = [100*sin(2*pi*t/T)+pos(3)/2 100*cos(2*pi*t/T)+pos(4)/2]; 
+plot(mpos(:,1),mpos(:,2));
+
+% show button down activity 
+set(gcf,'WindowButtonDownFcn',@(hObj,event)disp(get(hObj,'SelectionType')));
+
+% adjust axis so its data = pixels 
+pos = get(gcf,'Position'); 
+set(gca,'Units','pixels','Position',[0 0 pos([3 4])],'XLim',[0 pos(3)],'YLim',[0 pos(4)]);
+
+% generate commands to follow the cirle & make it to drag 
+N = size(mpos,1); 
+cmds = [cell(N,1) mat2cell(mpos,ones(N,1),2) cell(N,1)]; 
+cmds{1,3} = 'drag_on'; 
+cmds{N,3} = 'drag_off';
+
+% emulate! 
+jmouseemu(cmds,Ts)

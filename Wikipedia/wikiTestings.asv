@@ -1,0 +1,26 @@
+% do a wiki search on a topic
+%searchTerm = "Space Shuttle";
+clear all
+tic; [results] = wikiSearch("Space Shuttle"); toc;
+tic; data = wikiParse(results); toc;
+tic; textArray = wikiCompile(data); toc;
+
+% build a model out of the results
+ documents = preprocessText(textArray);
+ bag = bagOfWords(documents);
+ bag = removeInfrequentWords(bag,2);
+ bag = removeEmptyDocuments(bag);
+ 
+[numOfTopics] = getNumOfTopics(documents,0.1,[45 50 75 100]);
+ 
+%% chose a number of topics and build a model
+ numTopics = 5;
+ mdl = fitlda(bag,numTopics,'Verbose',0);
+ 
+figure;
+hold on
+for topicIdx = 1:numTopics
+    subplot(3,2,topicIdx)
+    wordcloud(mdl,topicIdx);
+    title("Topic " + topicIdx)
+end
